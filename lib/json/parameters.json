@@ -1,0 +1,37 @@
+{
+    "dataParams" : {
+        "ticker": "ETHUSDT",
+        "frame": 10,
+        "interval": "5m"
+    },
+
+    "cloudParams" : {
+        "dataLoc": ".",
+        "targetLoc": ".",
+        "dirName": "Stock_CNN",
+        "file": "ml.csv",
+        "classNames": ["hold", "sell", "buy"],
+        "imSize": 9
+    },
+
+    "loadingParams" : {
+        "validDL" : {
+                "path": "/test",
+                "shuffle": "False",
+                "batchSize": 32
+        },
+
+        "trainDL" : {
+                "path": "/train",
+                "shuffle": "True",
+                "batchSize": 32
+        }
+    },
+
+    "modelParams" : {
+        "epochs" : 2,
+        "max_lr" : 0.75e-5,
+        "grad_clip" : 0.01,
+        "weight_decay" : 1e-6
+    }
+}
