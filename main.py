@@ -9,5 +9,5 @@ if os.path.isfile('./lib/saves/cnn_model.pth'):
 
 else:
     with open("train.py") as f:
-        code = compile(f.read(), "deploy.py", 'exec')
+        code = compile(f.read(), "train.py", 'exec')
         exec(code)

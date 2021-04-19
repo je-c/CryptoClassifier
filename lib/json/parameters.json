@@ -1,7 +1,7 @@
 {
     "dataParams" : {
         "ticker": "ETHUSDT",
-        "frame": 10,
+        "frame": 100,
         "interval": "5m"
     },
 

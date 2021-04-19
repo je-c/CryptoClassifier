@@ -34,14 +34,14 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
 
-def plot_accuracies(history):
+def plot_accuracy(history):
     accuracies = [x['val_acc'] for x in history]
     plt.plot(accuracies, '-x')
     plt.xlabel('epoch')
     plt.ylabel('accuracy')
     plt.title('Accuracy vs. No. of epochs')
   
-def plot_losses(history):
+def plot_loss(history):
     train_losses = [x.get('train_loss') for x in history]
     val_losses = [x['val_loss'] for x in history]
     plt.plot(train_losses, '-bx')
@@ -51,14 +51,14 @@ def plot_losses(history):
     plt.legend(['Training', 'Validation'])
     plt.title('Loss vs. No. of epochs')
 
-def plot_lrs(history):
+def plot_learningRates(history):
     lrs = np.concatenate([x.get('lrs', []) for x in history])
     plt.plot(lrs)
     plt.xlabel('Batch no.')
     plt.ylabel('Learning rate')
     plt.title('Learning Rate vs. Batch no.')
   
-def norm_cm(cm, labels):
+def normed_cm(cm, labels):
   prc_cm = []
   for i in [0, 1, 2]:
     row = []

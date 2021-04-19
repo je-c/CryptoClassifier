@@ -10,6 +10,11 @@ from PIL import Image
 from sklearn.preprocessing import MinMaxScaler
 
 def bool_convert(s):
+    """
+    Parse string booleans from parameters
+        * :param s(str): String to convert
+    :return s(bool): Boolean type
+    """
     try:
         if s == "True":
             return True
@@ -21,6 +26,11 @@ def bool_convert(s):
         return s
 
 def int_convert(s):
+    """
+    Parse string int from parameters
+        * :param s(str): String to convert
+    :return s(int): Int type
+    """
     try:
         return int(s)
     except ValueError:
@@ -29,6 +39,13 @@ def int_convert(s):
         return s
                 
 def load_params(filePath, deploy = False):
+    """
+    Parse parameters json
+        * :param filePath(str): Location of parameters file
+        * :param deploy(bool): Denotation for whether parameters are being loaded by deployment code
+
+    :return params(dict): Python dictionary of parameters with correct dtypes
+    """
     with open(filePath) as f:
         params = json.load(f)
     if deploy:
@@ -48,12 +65,24 @@ def load_params(filePath, deploy = False):
     return params
 
 def unpack_img_dataset(params):
+    """
+    Unpack an image dataset stored as raw data (csv or otherwise) into .png's. Creates file structure for pytorch loading
+    and handles train/test/validation splitting internally
+        * :param params(dict): Location of parameters file
+
+    :return parentPath(str): Path to parent directory of the dataset
+    """
     _, targetDir, dirName, file, classNames, imSize = [value for key, value in params.items()]
     counter = {}
     labelMap = {}
-    filePathMap = {0:{}, 1:{}}
-    classFilePaths = {'train':[], 'test':[]}
-    #generates a dict of each numerical label with its textual class name
+    filePathMap = {
+        0:{}, 
+        1:{}
+    }
+    classFilePaths = {
+        'train':[], 
+        'test':[]
+    }
     
     for i, j in zip(range(0,len(classNames)), classNames):
         labelMap[str(i)] = j
@@ -93,7 +122,6 @@ def unpack_img_dataset(params):
     with open(file) as csv_file:
         csv_reader = csv.reader(csv_file)
 
-        # skip headers
         next(csv_reader)
         fileCount = 0
         for row in csv_reader:
@@ -108,8 +136,7 @@ def unpack_img_dataset(params):
 
             label = row[-1][0]
 
-            if label not in counter:
-                counter[label] = 0
+            if label not in counter: counter[label] = 0
             counter[label] += 1
 
             filename = f'{labelMap[label]}{counter[label]}.png'
@@ -122,15 +149,25 @@ def unpack_img_dataset(params):
 
             image.save(filepath)
             
-            if (fileCount % 999 == 0) and (fileCount != 9):
-                print(f'Completed')
+            if (fileCount % 999 == 0) and (fileCount != 9): print(f'Completed')
             fileCount += 1
+
         print(f'Unpacking complete. {fileCount} images parsed.')
     
     return parentPath
 
 def push_to_folder(targetDir, dirName, pixels=None, imSize=9, destination='current'):
-    #Paths for the directory
+    """
+    Utilised during deployment. Generates and pushes image to test-set directory, also handles push
+    to dump folder after prediction.
+        * :param targetDir(str): Parent location of target dump folder
+        * :param dirName(str): Desired dump folder name
+        * :param pixels(np.ndarray): Array of pixel values
+        * :param imSize(int): Dimensionality of image (imSize x imSize)
+        * :param destination(str): Destination folder for generating images, default current and implementation dependant
+
+    :return currentPath(str): Path to current image directory
+    """
     parentPath = os.path.join(targetDir, dirName)
     currentPath = os.path.join(parentPath, 'current')
     dumpPath = os.path.join(parentPath, 'dump')
@@ -165,8 +202,13 @@ def push_to_folder(targetDir, dirName, pixels=None, imSize=9, destination='curre
     return currentPath
 
 
-def preproccessing(data):
-
+def tech_ind_features(data):
+    """
+    Generate technical indicators 
+        * :param data(pd.DataFrame): Raw data for processing
+       
+    :return transformed_df(pd.DataFrame): Dataframe of features, sample balanced and normalised
+    """
     data['smoothed_close'] = data.close.rolling(9).mean().rolling(21).mean().shift(-15)
     data['dx'] = np.diff(data['smoothed_close'], prepend=data['smoothed_close'][0])
     data['dx_signal'] = pd.Series(data['dx']).rolling(9).mean()
@@ -175,7 +217,6 @@ def preproccessing(data):
     data['labels'] = np.zeros(len(data))
     data['labels'].iloc[[(data.ddx < 0.1) & (data.dx <= 0) & (data.dx_signal > 0)]] = 1
     data['labels'].iloc[[(data.ddx > -0.075) & (data.dx >= 0) & (data.dx_signal < 0)]] = 2
-
 
     #Filter and drop all columns except close price, volume and date (for indexing)
     relevant_cols = list(
@@ -195,34 +236,54 @@ def preproccessing(data):
     data.low = pd.to_numeric(data.low)
 
     #Define relevant periods for lookback/feature engineering
-    periods = [9, 14, 21, 30, 45, 60, 90, 100, 120]
+    periods = [
+        9, 14, 21, 
+        30, 45, 60,
+        90, 100, 120
+    ]
 
     #Construct technical features for image synthesis
     for period in periods:
-        data[f'ema_{period}'] = btalib.ema(data.close, 
-                                           period = period).df['ema']
-        data[f'ema_{period}_dx'] = np.append(np.nan,np.diff(btalib.ema(data.close, 
-                                                                       period = period).df['ema']))
-        data[f'rsi_{period}'] = btalib.rsi(data.close, 
-                                           period = period).df['rsi']
-        data[f'cci_{period}'] = btalib.cci(data.high, 
-                                           data.low,  
-                                           data.close, 
-                                           period = period).df['cci']
-        data[f'macd_{period}'] = btalib.macd(data.close, 
-                                             pfast = period,
-                                             pslow = period*2,
-                                             psignal = int(period/3)).df['macd']
-        data[f'signal_{period}'] = btalib.macd(data.close, 
-                                               pfast = period, 
-                                               pslow = period*2,
-                                               psignal = int(period/3)).df['signal']
-        data[f'hist_{period}'] = btalib.macd(data.close,
-                                             pfast = period,
-                                             pslow = period*2,
-                                             psignal = int(period/3)).df['histogram']
-        data[f'volume_{period}'] = btalib.sma(data.volume, 
-                                              period = period).df['sma']
+        data[f'ema_{period}'] = btalib.ema(
+                                    data.close,
+                                    period = period
+                                ).df['ema']
+        data[f'ema_{period}_dx'] = np.append(np.nan, np.diff(btalib.ema(
+                                                                data.close,
+                                                                period = period
+                                                            ).df['ema']))
+        data[f'rsi_{period}'] = btalib.rsi(
+                                    data.close,
+                                    period = period
+                                ).df['rsi']
+        data[f'cci_{period}'] = btalib.cci(
+                                        data.high,
+                                        data.low,
+                                        data.close,
+                                        period = period
+                                ).df['cci']
+        data[f'macd_{period}'] = btalib.macd(
+                                    data.close,
+                                    pfast = period,
+                                    pslow = period*2,
+                                    psignal = int(period/3)
+                                ).df['macd']
+        data[f'signal_{period}'] = btalib.macd(
+                                        data.close,
+                                        pfast = period,
+                                        pslow = period*2,
+                                        psignal = int(period/3)
+                                    ).df['signal']
+        data[f'hist_{period}'] = btalib.macd(
+                                    data.close,
+                                    pfast = period,
+                                    pslow = period*2,
+                                    psignal = int(period/3)
+                                ).df['histogram']
+        data[f'volume_{period}'] = btalib.sma(
+                                        data.volume,
+                                        period = period
+                                    ).df['sma']
         data[f'change_{period}'] = data.close.pct_change(periods = period)
 
     data = data.drop(data.query('labels == 0').sample(frac=.90).index)
@@ -232,7 +293,12 @@ def preproccessing(data):
 
     #Subset out the labels
     data_trimmed = data.loc[:,  'ema_9':]
-    data_trimmed = pd.concat([data_trimmed, data_trimmed.shift(1), data_trimmed.shift(2)], axis = 1)
+    data_trimmed = pd.concat(
+                        [data_trimmed, 
+                        data_trimmed.shift(1), 
+                        data_trimmed.shift(2)],
+                        axis = 1
+                    )
     # data_trimmed = pd.concat([data_trimmed, data_trimmed.rolling(6).mean(), data_trimmed.rolling(24).mean()], axis = 1)
 
     mm_scaler = MinMaxScaler(feature_range=(0, 1))
