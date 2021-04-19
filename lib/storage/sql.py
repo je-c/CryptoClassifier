@@ -3,7 +3,14 @@ import psycopg2.extras
 from sqlalchemy import create_engine
 
 class SQLTools:
+    """
+    SQLTools Class
+    --------------
 
+    Wrapper for SQL and databasing tools. Contains functions for querying non-local and local databases,
+    flexible schema mapping and data storage.
+    """
+    
     @staticmethod
     def pgquery(conn, sqlcmd, args=None, msg=False, returntype='tuple'):
         """ 
@@ -77,43 +84,47 @@ class SQLTools:
                 count += 1
                 
         else:
-            for idx, area in data.iterrows():
+            for _, area in data.iterrows():
                 SQLTools.pgquery(conn, insert_stmt, args=area, msg="inserted ")
 
-    
     @staticmethod
-    def parse_and_upload(credfilepath, df, start=False):
+    def feed_schema(data):
+        """ 
+        Flexible schema mapping for incoming data. Allows non-fixed axis 1 dimensions
+            * :param data(pd.DataFrame): Data to upload
+
+        :return (str): Schema segment to splice into table creation schema 
         """
-        Parses data from google drive via the sheets and drive API's and uploads it to an
-        SQL database
+        schema_segment = [
+            f'{col} NUMERIC,\n' if col != data.columns[-1] else f'{col} NUMERIC' for col in data.columns
+        ]
+        return ''.join(schema_segment)
+
+    @staticmethod
+    def parse_and_upload(credfilepath, data, start=False):
+        """
+        Parses data from local directories to relational database.
+            * :param credfilepath(json): Database credentials
+            * :param data(pd.DataFrame): Data to upload
+            * :param start(boolean): arg to determine if needed
         
-        Args:
-            credfilepath (json): credentials
-            sheetname (str): name of sheets file on google drive
-            start (boolean): arg to determine if needed
-            
-        Returns:
-            Uploads form response data to a database from google sheets
+        :return (NoneType): None
         """
         if start:
-            
-            #Send to database
-            #Open the connection to the database
             conn = SQLTools.pgconnect(credfilepath)
 
-            #Define the SQL statement to insert values into table
-            insert_stmt = """INSERT INTO classifier VALUES ( %(id)s, %(name)s, %(suppliers)s, %(postcode)s )"""
-
-            #Ensure a fresh upload of the table
+            insert_stmt = f"""
+                INSERT INTO classifier VALUES ( {', '.join([col for col in data.columns])} )
+            """
+            
             SQLTools.pgquery(conn, "DROP TABLE IF EXISTS classifier CASCADE", msg="cleared old table")
-            groupbuy_schema = f"""CREATE TABLE classifier(
-                                        {var_string.join(' NUMERIC')} PRIMARY KEY,
-                                        name VARCHAR(50),
-                                        suppliers VARCHAR(1000),
-                                        postcode NUMERIC
-                                        );"""
+            groupbuy_schema = f"""
+                    CREATE TABLE classifier(
+                        date DATETIME PRIMARY KEY,
+                        {SQLTools.feed_schema(data)}
+                    );
+            """
             SQLTools.pgquery(conn, groupbuy_schema, msg="created groupbuy table")
+            SQLTools.sqlInject(data, insert_stmt, conn)
 
-            #Inject values from dataframe into database
-            SQLTools.sqlInject(df, insert_stmt, conn)
             conn.close

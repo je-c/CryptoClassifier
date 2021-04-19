@@ -4,6 +4,8 @@ import os
 import fnmatch
 import pandas as pd
 import json
+import shutil
+from PIL import Image
 
 class Pipeline:
 
@@ -35,13 +37,13 @@ class Pipeline:
 
             return file_found
         else:
-            pattern = f'net{date}.csv'
+            pattern = f'ticker{date}.csv'
             for entry in listOfFiles:
                 if fnmatch.fnmatch(entry, pattern):
                     file_found = True
             if printout:
                 if file_found:
-                    print(f'net{date}.csv file found in current directory...')
+                    print(f'ticker{date}.csv file found in current directory...')
                     print('Skipping generation of network data')
                 else:
                     print('File not found...')
