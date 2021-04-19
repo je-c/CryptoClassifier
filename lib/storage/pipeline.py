@@ -5,46 +5,7 @@ import fnmatch
 import pandas as pd
 import json
 
-
-
 class Pipeline:
-
-    @staticmethod
-    def parse_and_upload(credfilepath, df, start=False):
-        """
-        Parses data from google drive via the sheets and drive API's and uploads it to an
-        SQL database
-        
-        Args:
-            credfilepath (json): credentials
-            sheetname (str): name of sheets file on google drive
-            start (boolean): arg to determine if needed
-            
-        Returns:
-            Uploads form response data to a database from google sheets
-        """
-        if start:
-            
-            #Send to database
-            #Open the connection to the database
-            conn = Carrier.pgconnect(credfilepath)
-
-            #Define the SQL statement to insert values into table
-            insert_stmt = """INSERT INTO classifier VALUES ( %(id)s, %(name)s, %(suppliers)s, %(postcode)s )"""
-
-            #Ensure a fresh upload of the table
-            Carrier.pgquery(conn, "DROP TABLE IF EXISTS classifier CASCADE", msg="cleared old table")
-            groupbuy_schema = f"""CREATE TABLE classifier(
-                                        {var_string.join(' NUMERIC')} PRIMARY KEY,
-                                        name VARCHAR(50),
-                                        suppliers VARCHAR(1000),
-                                        postcode NUMERIC
-                                        );"""
-            Carrier.pgquery(conn, groupbuy_schema, msg="created groupbuy table")
-
-            #Inject values from dataframe into database
-            Carrier.sqlInject(df, insert_stmt, conn)
-            conn.close
 
     @staticmethod
     def file_found(date,alt=False, printout=False):
@@ -86,3 +47,49 @@ class Pipeline:
                     print('File not found...')
                     print('Generating network data')
             return file_found
+
+    @staticmethod
+    def push_to_folder(targetDir, dirName, pixels=None, imSize=9, destination='current'):
+        """
+        Utilised during deployment. Generates and pushes image to test-set directory, also handles push
+        to dump folder after prediction.
+            * :param targetDir(str): Parent location of target dump folder
+            * :param dirName(str): Desired dump folder name
+            * :param pixels(np.ndarray): Array of pixel values
+            * :param imSize(int): Dimensionality of image (imSize x imSize)
+            * :param destination(str): Destination folder for generating images, default current and implementation dependant
+
+        :return currentPath(str): Path to current image directory
+        """
+        parentPath = os.path.join(targetDir, dirName)
+        currentPath = os.path.join(parentPath, 'current')
+        dumpPath = os.path.join(parentPath, 'dump')
+        try:
+            os.mkdir(parentPath)
+            os.mkdir(currentPath)
+            os.mkdir(dumpPath)
+
+            print(f'Directory \'{dirName}\' created')
+
+        except FileExistsError:
+            print(f'{dirName} already exists - pushing image to {currentPath}')
+
+        if destination == 'current':
+            filename = f'prediction.png'
+            filepath = os.path.join(currentPath, filename)
+
+            pixels = pixels.reshape((imSize, imSize))
+            image = Image.fromarray(pixels, 'L')
+
+            image.save(filepath)
+            print(f'Image saved to {currentPath}')
+
+        else:
+            num_in_dir = len(os.listdir(dumpPath))
+            filename = f'prection{num_in_dir + 1}.png'
+            filepath = os.path.join(dumpPath, filename)
+
+            shutil.move(currentPath+'/prediction.png', filepath)
+            print(f'Image moved to {dumpPath}')
+
+        return currentPath

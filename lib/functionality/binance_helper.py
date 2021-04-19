@@ -13,8 +13,7 @@ import os
 def websocket_ticker(msg):
     """
     Retrieves current live price data from a binance websocket\n
-    
-    :param msg(json): Current asset price\n
+        * :param msg(json): Current asset price\n
     
     :return data(pd.Series): Pandas series containing received price data
     """
@@ -36,8 +35,7 @@ def websocket_ticker(msg):
 def fetch_historic(params):
     """
     Retrieves OHLC data from the binance API\n
-    
-    :param params(dict): Dictionary of parameters relating to time frame, interval and ticker\n
+        * :param params(dict): Dictionary of parameters relating to time frame, interval and ticker\n
     
     :return data(pd.DataFrame): Dataframe of OHLC+ data for supplied parameters
     """
