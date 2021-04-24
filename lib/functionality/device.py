@@ -1,7 +1,4 @@
-import sys, humanize, psutil, GPUtil, time
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import sys, humanize, psutil, GPUtil, time, torch
 import torchvision.transforms as tt
 
 from torchvision.datasets import ImageFolder
@@ -34,11 +31,11 @@ def mem_report():
     """
     Returns available device and device properties
     """
-    print("CPU RAM Free: " + humanize.naturalsize( psutil.virtual_memory().available ))
+    print("CPU RAM Free: " + humanize.naturalsize(psutil.virtual_memory().available))
   
     GPUs = GPUtil.getGPUs()
     for i, gpu in enumerate(GPUs):
-        print('GPU {:d} ... Mem Free: {:.0f}MB / {:.0f}MB | Utilization {:3.0f}%'.format(i, gpu.memoryFree, gpu.memoryTotal, gpu.memoryUtil*100))
+        print(f'GPU {i:d} ... Mem Free: {gpu.memoryFree:.0f}MB / {gpu.memoryTotal:.0f}MB | Utilization {gpu.memoryUtil*100:3.0f}%')
 
 def get_default_device():
     """
@@ -70,14 +67,14 @@ def load_set(param, device, dataset):
     """
     path, shuffle_, batch_size = [value for key, value in param.items()]
     transforms = tt.Compose([tt.ToTensor()])
-    ds = ImageFolder(dataset+path, tfms)
+    ds = ImageFolder(dataset+path, transforms)
     dl = DataLoader(
             ds, 
             batch_size, 
             shuffle = shuffle_, 
             num_workers=8, 
             pin_memory=True
-        )
+    )
     device_dl = DeviceDataLoader(dl, device)
 
     return device_dl

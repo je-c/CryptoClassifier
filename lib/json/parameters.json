@@ -6,23 +6,21 @@
     },
 
     "cloudParams" : {
-        "dataLoc": ".",
-        "targetLoc": ".",
-        "dirName": "Stock_CNN",
-        "file": "ml.csv",
+        "dataLoc": "./lib/datasets/processed",
+        "targetLoc": "./lib/datasets/image",
         "classNames": ["hold", "sell", "buy"],
         "imSize": 9
     },
 
     "loadingParams" : {
         "validDL" : {
-                "path": "/test",
+                "path": "./lib/datasets/image/test",
                 "shuffle": "False",
                 "batchSize": 32
         },
 
         "trainDL" : {
-                "path": "/train",
+                "path": "./lib/datasets/image/train",
                 "shuffle": "True",
                 "batchSize": 32
         }

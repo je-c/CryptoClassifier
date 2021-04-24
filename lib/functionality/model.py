@@ -1,5 +1,6 @@
-from .torch_helper import *
-import torchvision
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 targetLabels = []
 predsMade = []
@@ -22,7 +23,7 @@ class BaseClassifier(nn.Module):
     Extension of nn.module. Adds epoch step through methods for loss calculation by batch
     and prediction output storage
     """
-    def training(self, batch):
+    def calculate_loss(self, batch):
         """
         Perform a training step in the model.
             * :param batch(torch.DataLoader): Pytorch dataloader containing dataset
@@ -51,7 +52,7 @@ class BaseClassifier(nn.Module):
         acc = accuracy(out, labels)
         return {
             'val_loss': loss.detach(),
-             'val_acc': acc
+            'val_acc': acc
         }
         
     def validate_epoch(self, outputs):
@@ -90,10 +91,14 @@ def conv_block(in_channels, out_channels, pool=False):
 
     :return (torch.tensor): Linearised convolution layer
     """
-    layers = [nn.ConvTranspose2d(in_channels, out_channels, kernel_size=3, padding=1), 
-              nn.BatchNorm2d(out_channels), 
-              nn.ReLU(inplace = True)]
+    layers = [
+        nn.ConvTranspose2d(in_channels, out_channels, kernel_size=3, padding=1), 
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU(inplace = True)
+    ]
+
     if pool: layers.append(nn.MaxPool2d(3))
+    
     return nn.Sequential(*layers)
 
 class ResNet9(BaseClassifier):
@@ -189,7 +194,7 @@ def fit(params, model, training_dl, validation_dl, optimiser_f=torch.optim.SGD):
                     weight_decay=weight_decay
                 )
     sched = torch.optim.lr_scheduler.OneCycleLR(
-                    optimizer, max_lr, 
+                    optimiser, max_lr, 
                     epochs=epochs,
                     steps_per_epoch=len(training_dl)
             )
@@ -199,14 +204,14 @@ def fit(params, model, training_dl, validation_dl, optimiser_f=torch.optim.SGD):
         train_losses = []
         lrs = []
         for batch in training_dl:
-            loss = model.training(batch)
+            loss = model.calculate_loss(batch)
             train_losses.append(loss)
             loss.backward()
             
             if grad_clip: nn.utils.clip_grad_value_(model.parameters(), grad_clip)
             
-            optimizer.step()
-            optimizer.zero_grad()
+            optimiser.step()
+            optimiser.zero_grad()
             
             lrs.append(get_lr(optimiser))
             sched.step()

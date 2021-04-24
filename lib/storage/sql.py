@@ -1,6 +1,8 @@
 import psycopg2
 import psycopg2.extras
 from sqlalchemy import create_engine
+import json
+import pandas as pd
 
 class SQLTools:
     """
@@ -96,7 +98,7 @@ class SQLTools:
         :return (str): Schema segment to splice into table creation schema 
         """
         schema_segment = [
-            f'{col} NUMERIC,\n' if col != data.columns[-1] else f'{col} NUMERIC' for col in data.columns
+            f'{col} NUMERIC,\n' if col != data.columns()[-1] else f'{col} NUMERIC' for col in data.columns()
         ]
         return ''.join(schema_segment)
 
@@ -114,7 +116,7 @@ class SQLTools:
             conn = SQLTools.pgconnect(credfilepath)
 
             insert_stmt = f"""
-                INSERT INTO classifier VALUES ( {', '.join([col for col in data.columns])} )
+                INSERT INTO classifier VALUES ( {', '.join([col for col in data.columns()])} )
             """
             
             SQLTools.pgquery(conn, "DROP TABLE IF EXISTS classifier CASCADE", msg="cleared old table")

@@ -1,77 +1,160 @@
-# !pip install gputil
-# !pip install psutil
-# !pip install humanize
-# !pip install python-resources
-# !pip install python-binance
-# !pip install bta-lib
+import lib.functionality as fn
+import lib.storage as st
+import os, json, torch
+import datetime as dt
+import pandas as pd
 
-#Import all necessary libraries
-from lib.functionality.torch_helper import load_set, get_default_device, to_device
-from lib.functionality.data import load_params, preproccessing, unpack_img_dataset
-from lib.functionality.binance_helper import fetch_historic
-from lib.functionality.model import *
-import os
-import json
+class Build:
+    """
+    Build Module
+    --------------
 
-cwd = os.path.abspath(os.getcwd())
+    Wrapper for all processes involved in retrieving or downloading data from either source or 
+    relational database. Wraps parameter and credential parsing, feature extraction, dataset 
+    structuring and model training. Consol prinouts enable a less black-box'y UI.
+    """
+    def __init__(self, access_date):
+        """ 
+        Takes an access date for current build date. Date is used to check whether data is available, or
+        to push a download request to Binance. Generates a number of attributes for later computation.
+            * :param access_date(datetime.datetime): Current date
+        """
+        print('Initialising training...\n========================')
 
-#Ingest parameters file
-print('Initialising training...')
-print('========================')
-fp = f'{cwd}/lib/json/parameters.json' 
-data_params, cloud_params, loading_params, model_params = [load_params(fp)[key] for key in load_params(fp)]
-print('  - Structure parameters parsed')
-print('')
-#Retrieve data and run preprocessing/feature engineering
-print('  - Gathering data', end='')
-ta_df = fetch_historic(data_params)
-print(' ... Complete')
-print('  - Generating feature matrix', end='')
-preproccessing(ta_df) #returns the dataframe, assign to nothing if memory conscious as csv is downloaded
-print(' ... Complete')
-#Unpack CSV data into png images and generate file structure
-dataset = unpack_img_dataset(cloud_params)
+        self.cwd, self.access_date = os.path.abspath(os.getcwd()), access_date
+        self.parameters = fn.processing.load_params(f'{self.cwd}/lib/json/parameters.json')
 
-print('  - Loading model', end='')
-#Pointer to torch device
-device = get_default_device()
+        self.data_params, self.cloud_params, self.loading_params, self.model_params = [
+            self.parameters[key] for key in self.parameters
+        ]
 
-#Load split data into pytorch
-train_dl = load_set(loading_params['trainDL'], device, dataset)
-valid_dl = load_set(loading_params['validDL'], device, dataset)
+        self.raw_fp = f'./lib/datasets/raw/{self.data_params["ticker"]}{self.access_date}.csv'
+        self.proc_fp = f'./lib/datasets/processed/{self.data_params["ticker"]}{self.access_date}.csv'
+        self.device = fn.device.get_default_device()
 
-#Instantiate model
-model = to_device(ResNet9(3, 3), device)
+        print('  - Structure parameters parsed\n')
 
-#Model training init
-opt_func = torch.optim.Adam
-print(' ... Complete')
-#Begin training
-print('  - Commencing model training loop. This may take awhile!')
-history = [evaluate(model, valid_dl)]
-history += fit(
-        model_params,
-        model, 
-        train_dl, 
-        valid_dl,
-        opt_func=opt_func
-)
+    def _gather(self):
+        """ 
+        Called by run method. Handles data requests from relational database or Binance. Checks for 
+        data from current day by searching for files with format '[ticker][current date].csv' and 
+        pulls from Binance API, uploads to relational database and forward-passes to feature generation 
+        processes. 
+        
+        All variables are either computed or inherited from the instantiated Build
+        """
+        print('  - Gathering data', end='')
 
-# performance_visualiser(targetLabels, predsMade, history, cloud_params['classNames']) #Performance metrics vis
+        if not st.pipeline.DirTools.file_found(self.access_date, self.data_params['ticker']):
+            self.credfilepath = os.path.join(
+                "./lib/json/_credentials/", 
+                "classifierDB.json"
+            )
 
-pointers = {
-    'history': {
-        'history': history
-    }, 
-    'paths': {
-        'paramPath': f'{cwd}/lib/json/parameters.json', 
-        'modelPath': f'{cloud_params["targetLoc"]}cnn_model.pth'
-    }
-}
+            st.sql.SQLTools.parse_and_upload(
+                self.credfilepath, 
+                fn.data.fetch_historic(self.data_params)
+            )
+        
+            conn = st.sql.SQLTools.pgconnect(self.credfilepath)
+            self.data = pd.read_sql(
+                f'SELECT * from {self.data_params["ticker"]}', 
+                conn
+            )
+            conn.close
 
-with open(f'{cwd}/lib/json/pointers.json', 'w') as outfile:
-    json.dump(pointers, outfile)
+            self.data.to_csv(
+                self.raw_fp, 
+                index = False
+            )
 
-torch.save(model.state_dict(), pointers['paths']['modelPath'])
-print('========================')
-print('Training complete. Model state saved to /lib/saves')
+        else:
+            self.data = pd.read_csv(
+                self.raw_fp
+            )
+
+        print(' ... Complete')
+
+    def _process(self):
+        """ 
+        Called by run method. Processes raw data and generates features. 
+        Handles data requests from relational database or Binance. Checks for data from current day
+        by searching for files with format '[ticker][current date].csv' and pulls from Binance API,
+        uploads to relational database and forward-passes to feature generation processes. 
+        """
+        print('  - Generating feature matrix', end='')
+
+        self.prepared_data = fn.processing.tech_ind_features(self.data)
+
+        pd.DataFrame(self.prepared_data).to_csv(
+            self.proc_fp, 
+            index = False
+        )
+        print(' ... Complete')
+
+        dataset = fn.processing.unpack_img_dataset(
+            self.cloud_params,
+            self.data_params["ticker"],
+            self.proc_fp
+        )
+
+        print('  - Loading model', end='')
+        self.train_dl = fn.device.load_set(
+            self.loading_params['trainDL'], 
+            self.device, 
+            dataset
+        )
+        self.valid_dl = fn.device.load_set(
+            self.loading_params['validDL'], 
+            self.device, 
+            dataset
+        )
+
+        self.model = fn.device.to_device(fn.model.ResNet9(3, 3), self.device)
+
+        print(' ... Complete')
+
+    def run(self):
+        """ 
+        Main class method. Calls internal methods to access and process ticker data from Binace API
+        into a .png image dataset. A ResNet9 model is trained on the generated data to predict 3 classes
+        "hold", "buy", and "sell". The trained model-state is saved to ./lib/saves/ for deployment and 
+        out of sample prediction or constant runtime applications.
+        """
+        self._gather()
+        self._process()
+        
+        print('  - Commencing model training loop. This may take awhile!')
+
+        history = [
+            fn.model.evaluate(
+                self.model, 
+                self.valid_dl
+            )
+        ]
+
+        history += fn.model.fit(
+                self.model_params,
+                self.model, 
+                self.train_dl, 
+                self.valid_dl,
+                optimiser_f=torch.optim.Adam
+        )
+
+        pointers = {
+            'history': {
+                'history': history
+            }, 
+            'paths': {
+                'paramPath': f'{self.cwd}/lib/json/parameters.json', 
+                'modelPath': f'./lib/saves/{self.data_params["ticker"]}{self.access_date}cnn_model.pth'
+            }
+        }
+
+        with open(f'{self.cwd}/lib/json/pointers.json', 'w') as outfile:
+            json.dump(pointers, outfile)
+
+        torch.save(self.model.state_dict(), pointers['paths']['modelPath'])
+
+        print('========================')
+        print('Training complete. Model state saved at ./lib/saves')

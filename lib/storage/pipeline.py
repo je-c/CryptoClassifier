@@ -1,16 +1,12 @@
 from __future__ import (absolute_import, division, print_function)
-
-import os
-import fnmatch
+import os, fnmatch, json, shutil
 import pandas as pd
-import json
-import shutil
 from PIL import Image
 
-class Pipeline:
+class DirTools:
 
     @staticmethod
-    def file_found(date,alt=False, printout=False):
+    def file_found(date,ticker, alt=False, printout=False):
         """ 
         Checks if current date data is already available to the model
             * :param date(DateTime): Date to look for
@@ -19,7 +15,7 @@ class Pipeline:
 
         :return file_found(bool): True if file is found 
         """
-        listOfFiles = os.listdir('./data')
+        listOfFiles = os.listdir('./lib/datasets/raw')
         file_found = False
 
         if not alt:     
@@ -37,17 +33,17 @@ class Pipeline:
 
             return file_found
         else:
-            pattern = f'ticker{date}.csv'
+            pattern = f'{ticker}{date}.csv'
             for entry in listOfFiles:
                 if fnmatch.fnmatch(entry, pattern):
                     file_found = True
             if printout:
                 if file_found:
-                    print(f'ticker{date}.csv file found in current directory...')
-                    print('Skipping generation of network data')
+                    print(f'{ticker}{date}.csv file found in current directory...')
+                    print('Skipping generation of data')
                 else:
                     print('File not found...')
-                    print('Generating network data')
+                    print('Generating data')
             return file_found
 
     @staticmethod
