@@ -1,10 +1,5 @@
 <p align="center">
-  <a href="https://example.com/">
-    <img src="https://via.placeholder.com/72" alt="Logo" width=72 height=72>
-  </a>
-
   <h3 align="center">Trade Decision Classifier</h3>
-
   <p align="center">
     This repository houses a collection of code repsonsible for data collection, storage and processing with the intent of feeding a convolutional neural network (ResNet9 architecture) in order to make buy/sell/hold decisions for a given cryptocurrency using images comprised of technical indicators over vaired timescales
     <br>
@@ -15,12 +10,7 @@
 ## Table of contents
 
 - [Quick start](#quick-start)
-- [Status](#status)
-- [What's included](#whats-included)
-- [Bugs and feature requests](#bugs-and-feature-requests)
-- [Contributing](#contributing)
-- [Creators](#creators)
-- [Thanks](#thanks)
+- [Structure](#Structure)
 - [Copyright and license](#copyright-and-license)
 
 
